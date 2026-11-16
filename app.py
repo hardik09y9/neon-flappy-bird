@@ -61,7 +61,7 @@ button.secondary{background:#0b1c31;color:#b9eaff;border:1px solid #205174;box-s
   <div class="pill"><div class="small">BEST</div><div class="value" id="best">0</div></div>
   <div class="pill"><div class="small">SPEED</div><div class="value" id="speed">1.0x</div></div>
  </div>
- <canvas id="game" width="700" height="500"></canvas>
+ <canvas id="game" width="700" height="500" tabindex="0" aria-label="Neon Flappy Bird game. Press Space or Arrow Up to flap."></canvas>
  <div class="controls">
   <button id="start">START GAME</button>
   <button class="secondary" id="sound">SOUND: ON</button>
@@ -82,9 +82,24 @@ reset();
 function beep(freq=500,dur=.06,type='sine'){if(!soundOn)return;try{audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();let o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(.045,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+dur);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+dur)}catch(e){}}
 function flap(){if(state==='over'){reset();state='playing';bird.vy=-6.4;beep(620);return}if(state==='ready')state='playing';if(state==='playing'){bird.vy=-6.4;beep(620,.07,'triangle');for(let i=0;i<5;i++)particles.push({x:bird.x-10,y:bird.y+rand(-5,5),vx:rand(-2,-.5),vy:rand(-1,1),life:20});}}
 function action(e){if(e)e.preventDefault();flap()}
-canvas.addEventListener('pointerdown',action);
-document.addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();if(!e.repeat)flap()}});
-document.getElementById('start').onclick=()=>{if(state==='over'||state==='ready'){reset();state='playing';flap()}};
+canvas.addEventListener('pointerdown',e=>{canvas.focus();action(e)});
+function handleKey(e){
+ if(e.code==='Space'||e.code==='ArrowUp'){
+  e.preventDefault();
+  if(!e.repeat) flap();
+ }
+}
+// Capture keys at the iframe window and document level. Focusing the canvas
+// ensures the embedded game receives keyboard input after a click or tap.
+window.addEventListener('keydown',handleKey);
+document.addEventListener('keydown',handleKey);
+document.getElementById('start').onclick=()=>{
+ if(state==='over'||state==='ready'){
+  reset();state='playing';flap();
+ }
+ canvas.focus();
+};
+canvas.addEventListener('blur',()=>{});
 document.getElementById('sound').onclick=()=>{soundOn=!soundOn;document.getElementById('sound').textContent='SOUND: '+(soundOn?'ON':'OFF');};
 function roundedRect(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
 function drawBackground(){
@@ -111,38 +126,3 @@ function drawBird(){
  ctx.shadowBlur=0;ctx.fillStyle='#b8ffff';ctx.beginPath();ctx.ellipse(-8,5,9,5,-.3,0,Math.PI*2);ctx.fill();
  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(8,-5,5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#06152a';ctx.beginPath();ctx.arc(10,-5,2.2,0,Math.PI*2);ctx.fill();
  ctx.fillStyle='#ffb84d';ctx.shadowColor='#ff8c00';ctx.shadowBlur=8;ctx.beginPath();ctx.moveTo(15,1);ctx.lineTo(27,5);ctx.lineTo(15,8);ctx.closePath();ctx.fill();
- ctx.restore();ctx.shadowBlur=0;
-}
-function textCenter(t,y,size=24,color='#dffaff'){ctx.font=`800 ${size}px Arial`;ctx.textAlign='center';ctx.fillStyle=color;ctx.shadowColor='#00cfff';ctx.shadowBlur=12;ctx.fillText(t,W/2,y);ctx.shadowBlur=0}
-function endGame(){state='over';beep(140,.3,'sawtooth');if(score>best){best=score;bestEl.textContent=best;try{localStorage.setItem('neonFlappyBest',best)}catch(e){}}}
-function update(){
- frame++;
- stars.forEach(s=>{if(state==='playing'){s.x-=s.s*.5;if(s.x<0)s.x=W}});
- if(state==='playing'){
-  let speed=3.15+Math.min(score*.075,2.5);speedEl.textContent=(speed/3.15).toFixed(1)+'x';
-  bird.vy+=.34;bird.y+=bird.vy;bird.rot=Math.min(.9,Math.max(-.55,bird.vy*.09));
-  if(frame%100===0){let gap=Math.max(128,174-score*1.1),top=rand(55,H-70-gap);pipes.push({x:W+10,top,gap,passed:false})}
-  pipes.forEach(p=>{p.x-=speed;if(!p.passed&&p.x+66<bird.x){p.passed=true;score++;scoreEl.textContent=score;beep(880,.06,'sine')}});
-  pipes=pipes.filter(p=>p.x>-100);
-  for(const p of pipes){let bx=bird.x,by=bird.y,r=bird.r;if(bx+r>p.x-5&&bx-r<p.x+71&&(by-r<p.top||by+r>p.top+p.gap))endGame()}
-  if(bird.y+bird.r>H-46||bird.y-bird.r<0)endGame();
- }
- particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life--});particles=particles.filter(p=>p.life>0);
-}
-function render(){
- drawBackground();
- pipes.forEach(drawPipe);
- particles.forEach(p=>{ctx.globalAlpha=p.life/20;ctx.fillStyle='#00eaff';ctx.shadowColor='#00eaff';ctx.shadowBlur=10;ctx.beginPath();ctx.arc(p.x,p.y,3,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0});ctx.globalAlpha=1;
- drawBird();
- if(state==='ready'){ctx.fillStyle='rgba(2,10,25,.48)';roundedRect(120,150,460,190,18);textCenter('READY TO FLY?',210,30);textCenter('Tap, click or press SPACE',252,17,'#9bc8e4');textCenter('Pass through the neon gates',284,14,'#6e9dbd')}
- if(state==='over'){ctx.fillStyle='rgba(2,8,22,.76)';roundedRect(125,135,450,225,18);ctx.strokeStyle='#00d9ff';ctx.shadowColor='#00d9ff';ctx.shadowBlur=18;ctx.strokeRect(125,135,450,225);ctx.shadowBlur=0;textCenter('GAME OVER',190,34,'#ff6b9d');textCenter('SCORE  '+score,240,25);textCenter('BEST  '+best,278,18,'#9edcff');textCenter('Tap / SPACE to try again',323,16,'#7beeff')}
-}
-function loop(){update();render();requestAnimationFrame(loop)}loop();
-})();
-</script>
-</body>
-</html>
-"""
-
-components.html(game_html, height=650, scrolling=False)
-st.markdown('<div class="hint">NEON FLAPPY • BUILT WITH PYTHON • PLAY IN YOUR BROWSER</div>', unsafe_allow_html=True)
